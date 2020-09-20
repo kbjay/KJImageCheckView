@@ -12,16 +12,15 @@ import android.view.ScaleGestureDetector
 import android.view.View
 import android.widget.OverScroller
 import androidx.core.view.GestureDetectorCompat
+import kotlin.properties.Delegates
 
 /**
  * todo 自定义
  * 1.src
- * 2.span_over_scroll
- * 3.scale_ratio
+ * 2.SPAN_OVER_SCROLL
+ * 3.SCALE_REBOUND_FACTOR
  */
-class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(context, attrs),
-    GestureDetector.OnGestureListener, GestureDetector.OnDoubleTapListener, Runnable,
-    ScaleGestureDetector.OnScaleGestureListener {
+class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
     private val mPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val mBitmap = if (Math.random() > 0.5f) {
         BitmapFactory.decodeResource(context.resources, R.drawable.kb)
@@ -31,6 +30,10 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
 
     companion object {
         const val SPAN_OVER_SCROLL = 200
+        const val SCALE_REBOUND_FACTOR = 0.2f
+        const val HORIZONTAL_PIC = 1
+        const val VERTICAL_PIC = 2
+        const val SUITABLE_PIC = 3
     }
 
     private var mTranslateX = 0f
@@ -46,179 +49,314 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
     private var mScaleBig = 1f
     private var mScaleSmall = 1f
     private var mIsBig = false
-
-    /**
-     * 放缩动画
-     */
     private var mScaleRate = 1f
         set(value) {
             field = value
             invalidate()
         }
-
-    private val mScaleRateAnimator by lazy {
-        ObjectAnimator.ofFloat(this, "mScaleRate", mScaleSmall, mScaleBig)
-    }
-
-    /**
-     * 手势监听（双击，滚动）
-     */
-    private var mGestureDetector = GestureDetectorCompat(context, this)
-
+    private var mPicMode by Delegates.notNull<Int>()
     /**
      * 处理fling
      */
     private val mOverScroller by lazy {
         OverScroller(context)
     }
+    /**
+     * 手势监听（双击，滚动，fling）
+     */
+    private var mGestureDetector = GestureDetectorCompat(
+        context,
+        object : GestureDetector.SimpleOnGestureListener(), GestureDetector.OnDoubleTapListener {
 
-    private val mScaleGestureDetector = ScaleGestureDetector(context, this)
+            override fun onDown(e: MotionEvent?): Boolean {
+                // 这里需要返回true表示我要消费事件，其他回调都无所谓
+                return true
+            }
+
+            override fun onFling(
+                e1: MotionEvent?,
+                e2: MotionEvent?,
+                velocityX: Float,
+                velocityY: Float
+            ): Boolean {
+                // e1：down事件
+                if (mScaleRate > mScaleSmall) {
+                    val minX = if (mPicMode == HORIZONTAL_PIC) {
+                        -(mBitmap.width * formatFlingScaleRate(mScaleRate) / 2f - width / 2f).toInt()
+                    } else 0
+                    val maxX = if (mPicMode == HORIZONTAL_PIC) {
+                        (mBitmap.width * formatFlingScaleRate(mScaleRate) / 2f - width / 2f).toInt()
+                    } else 0
+                    val minY = if (mPicMode == VERTICAL_PIC) {
+                        -(mBitmap.height * formatFlingScaleRate(mScaleRate) / 2f - height / 2f).toInt()
+                    } else 0
+                    val maxY = if (mPicMode == VERTICAL_PIC) {
+                        (mBitmap.height * formatFlingScaleRate(mScaleRate) / 2f - height / 2f).toInt()
+                    } else 0
+
+                    mOverScroller.fling(
+                        mTranslateX.toInt(), mTranslateY.toInt(),
+                        velocityX.toInt(), velocityY.toInt(),
+                        minX,
+                        maxX,
+                        minY,
+                        maxY,
+                        SPAN_OVER_SCROLL,
+                        SPAN_OVER_SCROLL
+                    )
+                    postOnAnimation { handleFling() }
+                }
+
+                return false
+            }
+
+            private fun handleFling() {
+                if (mOverScroller.computeScrollOffset()) {
+                    mTranslateX = mOverScroller.currX.toFloat()
+                    mTranslateY = mOverScroller.currY.toFloat()
+                    invalidate()
+                    postOnAnimation { handleFling() }
+                }
+            }
+
+            private fun formatFlingScaleRate(value: Float): Float {
+                return when {
+                    value <= mScaleSmall -> {
+                        mScaleSmall
+                    }
+                    value >= mScaleBig -> {
+                        mScaleBig
+                    }
+                    else -> {
+                        value
+                    }
+                }
+            }
+
+            override fun onScroll(
+                e1: MotionEvent?,
+                e2: MotionEvent?,
+                distanceX: Float,
+                distanceY: Float
+            ): Boolean {
+                // e1：down事件
+                // distanceX: 旧位置-新位置
+                if (mScaleRate > mScaleSmall) {
+                    mTranslateX -= distanceX
+                    mTranslateX = formatTranslateX(mTranslateX, mScaleRate)
+                    mTranslateY -= distanceY
+                    mTranslateY = formatTranslateY(mTranslateY, mScaleRate)
+                    invalidate()
+                }
+                return false
+            }
+
+            private var mTranslateXBeforeDoubleTap = 0f
+            private var mTranslateYBeforeDoubleTap = 0f
+            private var mScaleRateBeforeDoubleTap = 1f
+            override fun onDoubleTap(e: MotionEvent?): Boolean {
+                if (e == null) {
+                    return false
+                }
+                // 双击事件
+                if (mIsBig) {
+                    ObjectAnimator.ofFloat(
+                        this@KJScrollScaleImageView,
+                        "mTranslateY",
+                        mTranslateY,
+                        0f
+                    ).start()
+                    ObjectAnimator.ofFloat(
+                        this@KJScrollScaleImageView,
+                        "mTranslateX",
+                        mTranslateX,
+                        0f
+                    ).start()
+                    ObjectAnimator.ofFloat(
+                        this@KJScrollScaleImageView,
+                        "mScaleRate",
+                        mScaleRate,
+                        mScaleSmall
+                    ).start()
+                } else {
+                    mTranslateXBeforeDoubleTap = mTranslateX
+                    mTranslateYBeforeDoubleTap = mTranslateY
+                    mScaleRateBeforeDoubleTap = mScaleRate
+                    // 保证bitmap中点击的位置在放大之后相对view的位置不变
+                    ObjectAnimator.ofFloat(
+                        this@KJScrollScaleImageView,
+                        "mTranslateY",
+                        mTranslateYBeforeDoubleTap,
+                        formatTranslateY(
+                            (height / 2f - e.y) * (mScaleBig / mScaleRateBeforeDoubleTap - 1) + mTranslateYBeforeDoubleTap * (mScaleBig / mScaleRateBeforeDoubleTap),
+                            mScaleBig
+                        )
+                    ).start()
+                    ObjectAnimator.ofFloat(
+                        this@KJScrollScaleImageView,
+                        "mTranslateX",
+                        mTranslateXBeforeDoubleTap,
+                        formatTranslateX(
+                            (width / 2f - e.x) * (mScaleBig / mScaleRateBeforeDoubleTap - 1) + mTranslateXBeforeDoubleTap * (mScaleBig / mScaleRateBeforeDoubleTap),
+                            mScaleBig
+                        )
+                    ).start()
+                    ObjectAnimator.ofFloat(
+                        this@KJScrollScaleImageView,
+                        "mScaleRate",
+                        mScaleRate,
+                        mScaleBig
+                    ).start()
+                }
+                mIsBig = !mIsBig
+                return false
+            }
+
+            override fun onDoubleTapEvent(e: MotionEvent?): Boolean {
+                // 双击事件，第二下点击的事件回调（第二下点击了之后move或者直接up等等）
+                return false
+            }
+
+            override fun onSingleTapConfirmed(e: MotionEvent?): Boolean {
+                // 如果监听了双击事件，那么单击回调用这个
+                return false
+            }
+        })
+
+    /**
+     * 围绕中心双指放缩
+     */
+    private val mScaleGestureDetector =
+        ScaleGestureDetector(context, object : ScaleGestureDetector.OnScaleGestureListener {
+            // 双指放缩 反弹
+            private var mScaleMaxRate = 1f
+            private var mScaleMinRate = 1f
+            private var mScaleRateBeforeScale = 1f
+            private var mTranslateXBeforeScale = 0f
+            private var mTranslateYBeforeScale = 0f
+            private var mFocusX = 0f
+            private var mFocusY = 0f
+            override fun onScaleBegin(detector: ScaleGestureDetector?): Boolean {
+                if (mOverScroller.computeScrollOffset()) {
+                    return false
+                }
+                // 表示消费事件
+                if (detector != null) {
+                    mScaleRateBeforeScale = mScaleRate
+                    mScaleMaxRate = mScaleBig * (1 + SCALE_REBOUND_FACTOR)
+                    mScaleMinRate = mScaleSmall * (1 - SCALE_REBOUND_FACTOR)
+                    mFocusX = detector.focusX
+                    mFocusY = detector.focusY
+                    mTranslateXBeforeScale = formatTranslateX(mTranslateX, mScaleRate)
+                    mTranslateYBeforeScale = formatTranslateY(mTranslateY, mScaleRate)
+                }
+                return true
+            }
+
+            override fun onScaleEnd(detector: ScaleGestureDetector?) {
+                if (detector != null) {
+                    if (mScaleRate > mScaleBig) {
+                        mIsBig = true
+                        ObjectAnimator.ofFloat(this@KJScrollScaleImageView, "mScaleRate", mScaleRate, mScaleBig).start()
+                    }
+                    if (mScaleRate < mScaleSmall) {
+                        mIsBig = false
+                        ObjectAnimator.ofFloat(this@KJScrollScaleImageView, "mScaleRate", mScaleRate, mScaleSmall).start()
+                    }
+                }
+            }
+
+            override fun onScale(detector: ScaleGestureDetector?): Boolean {
+                if (detector != null) {
+                    mScaleRate = mScaleRateBeforeScale * detector.scaleFactor
+                    // 设置tranlateX,要求沿着中心点
+                    mScaleRate = formatScaleRate(mScaleRate)
+                    val translateX =
+                        (width / 2f - mFocusX) * (mScaleRate / mScaleRateBeforeScale - 1) + mTranslateXBeforeScale * (mScaleRate / mScaleRateBeforeScale)
+                    val translateY =
+                        (height / 2f - mFocusY) * (mScaleRate / mScaleRateBeforeScale - 1) + mTranslateYBeforeScale * (mScaleRate / mScaleRateBeforeScale)
+                    mTranslateX = formatTranslateX(translateX, mScaleRate)
+                    mTranslateY = formatTranslateY(translateY, mScaleRate)
+                    invalidate()
+                }
+                return false
+            }
+
+            private fun formatScaleRate(value: Float): Float {
+                return when {
+                    value <= mScaleMinRate ->
+                        mScaleMinRate
+                    value >= mScaleMaxRate ->
+                        mScaleMaxRate
+                    else ->
+                        value
+                }
+            }
+        })
+
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         // 如果view的宽高比小于bitmap的宽高比，横行长图片，否则就是纵向长图片
-        if (width.toFloat() / height < mBitmap.width.toFloat() / mBitmap.height) {
-            mScaleSmall = width.toFloat() / mBitmap.width
-            mScaleBig = height.toFloat() / mBitmap.height
-        } else {
-            mScaleSmall = height.toFloat() / mBitmap.height
-            mScaleBig = width.toFloat() / mBitmap.width
+        when {
+            width.toFloat() / height < mBitmap.width.toFloat() / mBitmap.height -> {
+                mScaleSmall = width.toFloat() / mBitmap.width
+                mScaleBig = height.toFloat() / mBitmap.height
+                mPicMode = HORIZONTAL_PIC
+            }
+            width.toFloat() / height > mBitmap.width.toFloat() / mBitmap.height -> {
+                mScaleSmall = height.toFloat() / mBitmap.height
+                mScaleBig = width.toFloat() / mBitmap.width
+                mPicMode = VERTICAL_PIC
+            }
+            else -> {
+                mScaleBig = 1f
+                mScaleSmall = 1f
+                mPicMode = SUITABLE_PIC
+            }
         }
         mScaleRate = mScaleSmall
     }
 
     override fun onDraw(canvas: Canvas?) {
-        canvas!!.translate(mTranslateX, mTranslateY)
-        canvas.scale(mScaleRate, mScaleRate, width.toFloat() / 2, height.toFloat() / 2)
-        canvas.drawBitmap(
-            mBitmap,
-            width.toFloat() / 2 - mBitmap.width.toFloat() / 2,
-            height.toFloat() / 2 - mBitmap.height.toFloat() / 2,
-            mPaint
-        )
+        if (canvas != null) {
+            canvas.translate(mTranslateX, mTranslateY)
+            canvas.scale(mScaleRate, mScaleRate, width.toFloat() / 2, height.toFloat() / 2)
+            canvas.drawBitmap(
+                mBitmap,
+                width.toFloat() / 2 - mBitmap.width.toFloat() / 2,
+                height.toFloat() / 2 - mBitmap.height.toFloat() / 2,
+                mPaint
+            )
+        }
     }
 
     override fun onTouchEvent(event: MotionEvent?): Boolean {
-//        var result = mScaleGestureDetector.onTouchEvent(event)
-//        if (!mScaleGestureDetector.isInProgress) {
-//            result = mGestureDetector.onTouchEvent(event)
-//        }
-//        return result
-        return mGestureDetector.onTouchEvent(event)
+        var result = mScaleGestureDetector.onTouchEvent(event)
+        if (!mScaleGestureDetector.isInProgress) {
+            result = mGestureDetector.onTouchEvent(event)
+        }
+        return result
     }
 
-    override fun onShowPress(e: MotionEvent?) {
-        // 按下，这里可以添加一些按下的动画，比如波纹效果
-    }
-
-    override fun onSingleTapUp(e: MotionEvent?): Boolean {
-        // 单击事件回调
-        return false
-    }
-
-    override fun onDown(e: MotionEvent?): Boolean {
-        // 这里需要返回true表示我要消费事件，其他回调都无所谓
-        return true
-    }
-
-    override fun onFling(
-        e1: MotionEvent?,
-        e2: MotionEvent?,
-        velocityX: Float,
-        velocityY: Float
-    ): Boolean {
-        // e1：down事件
-        if (mIsBig) {
-            mOverScroller.fling(
-                mTranslateX.toInt(), mTranslateY.toInt(), velocityX.toInt(), velocityY.toInt(),
-                -(mBitmap.width * mScaleRate / 2f - width / 2f).toInt(),
-                (mBitmap.width * mScaleRate / 2f - width / 2f).toInt(),
-                -(mBitmap.height * mScaleRate / 2f - height / 2f).toInt(),
-                (mBitmap.height * mScaleRate / 2f - height / 2f).toInt(),
-                SPAN_OVER_SCROLL,
-                SPAN_OVER_SCROLL
-            )
-            postOnAnimation(this)
+    private fun formatTranslateX(value: Float, scaleRate: Float): Float {
+        if (mPicMode != HORIZONTAL_PIC) {
+            return 0f
         }
 
-        return false
-    }
-
-    override fun onScroll(
-        e1: MotionEvent?,
-        e2: MotionEvent?,
-        distanceX: Float,
-        distanceY: Float
-    ): Boolean {
-        // e1：down事件
-        // distanceX: 旧位置-新位置
-        if (mIsBig) {
-            mTranslateX -= distanceX
-            mTranslateX = formatTranslateX(mTranslateX)
-            mTranslateY -= distanceY
-            mTranslateY = formatTranslateY(mTranslateY)
-            invalidate()
+        val formatRate = when {
+            scaleRate > mScaleBig -> mScaleBig
+            scaleRate < mScaleSmall -> mScaleSmall
+            else -> {
+                scaleRate
+            }
         }
-        return false
-    }
 
-    override fun onLongPress(e: MotionEvent?) {
-    }
-
-    override fun onDoubleTap(e: MotionEvent?): Boolean {
-        // 双击事件
-        if (mIsBig) {
-            ObjectAnimator.ofFloat(this, "mTranslateY", mTranslateY, 0f).start()
-            ObjectAnimator.ofFloat(this, "mTranslateX", mTranslateX, 0f).start()
-            mScaleRateAnimator.reverse()
-        } else {
-            // 保证bitmap中点击的位置在放大之后相对view的位置不变
-            ObjectAnimator.ofFloat(
-                this,
-                "mTranslateY",
-                0f,
-                formatTranslateY(-(e!!.y - height / 2f) * (mScaleBig / mScaleSmall - 1))
-            ).start()
-            ObjectAnimator.ofFloat(
-                this,
-                "mTranslateX",
-                0f,
-                formatTranslateX(-(e.x - width / 2f) * (mScaleBig / mScaleSmall - 1))
-            ).start()
-
-            mScaleRateAnimator.start()
+        if (width >= mBitmap.width * formatRate) {
+            return 0f
         }
-        mIsBig = !mIsBig
-        return false
-    }
 
-    override fun onDoubleTapEvent(e: MotionEvent?): Boolean {
-        // 双击事件，第二下点击的事件回调（第二下点击了之后move或者直接up等等）
-        return false
-    }
-
-    override fun onSingleTapConfirmed(e: MotionEvent?): Boolean {
-        // 如果监听了双击事件，那么单击回调用这个
-        return false
-    }
-
-    /**
-     * 处理fling事件
-     */
-    override fun run() {
-        if (mIsBig && mOverScroller.computeScrollOffset()) {
-            mTranslateX = mOverScroller.currX.toFloat()
-            mTranslateY = mOverScroller.currY.toFloat()
-            invalidate()
-
-            postOnAnimation(this)
-        }
-    }
-
-    /**
-     * big模式下 translateX不能越界
-     */
-    private fun formatTranslateX(value: Float): Float {
-        val gap = mBitmap.width * mScaleBig / 2f - width / 2f
+        val gap = mBitmap.width * formatRate / 2f - width / 2f
         return when {
             value >= gap -> {
                 gap
@@ -232,11 +370,24 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
         }
     }
 
-    /**
-     * big模式下 translateY不能越界
-     */
-    private fun formatTranslateY(value: Float): Float {
-        val gap = mBitmap.height * mScaleBig / 2f - height / 2f
+    private fun formatTranslateY(value: Float, scaleRate: Float): Float {
+        if (mPicMode != VERTICAL_PIC) {
+            return 0f
+        }
+
+        val formatRate = when {
+            scaleRate > mScaleBig -> mScaleBig
+            scaleRate < mScaleSmall -> mScaleSmall
+            else -> {
+                scaleRate
+            }
+        }
+
+        if (height >= mBitmap.height * formatRate) {
+            return 0f
+        }
+
+        val gap = mBitmap.height * formatRate / 2f - height / 2f
         return when {
             value >= gap -> {
                 gap
@@ -248,25 +399,5 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
                 value
             }
         }
-    }
-
-    private var mScaleGestureRate = 1f
-    override fun onScaleBegin(detector: ScaleGestureDetector?): Boolean {
-        // 表示消费事件
-        mScaleGestureRate = mScaleRate
-        return true
-    }
-
-    override fun onScaleEnd(detector: ScaleGestureDetector?) {
-    }
-
-    override fun onScale(detector: ScaleGestureDetector?): Boolean {
-        if (detector != null) {
-            mScaleRate = mScaleGestureRate * detector.scaleFactor
-
-
-            invalidate()
-        }
-        return false
     }
 }
