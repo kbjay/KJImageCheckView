@@ -1,5 +1,6 @@
 package com.kbjay.scrollscaleimageview
 
+import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.content.Context
 import android.graphics.BitmapFactory
@@ -25,7 +26,7 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
     private val mBitmap = if (Math.random() > 0.5f) {
         BitmapFactory.decodeResource(context.resources, R.drawable.kb)
     } else {
-        BitmapFactory.decodeResource(context.resources, R.drawable.timg)
+        BitmapFactory.decodeResource(context.resources, R.drawable.kb)
     }
 
     companion object {
@@ -34,6 +35,7 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
         const val HORIZONTAL_PIC = 1
         const val VERTICAL_PIC = 2
         const val SUITABLE_PIC = 3
+        const val DISMISS_TRANSLATE_Y_SPAN = 200
     }
 
     private var mTranslateX = 0f
@@ -55,12 +57,16 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
             invalidate()
         }
     private var mPicMode by Delegates.notNull<Int>()
+
     /**
      * 处理fling
      */
     private val mOverScroller by lazy {
         OverScroller(context)
     }
+
+    private var mIsScrolling = false
+
     /**
      * 手势监听（双击，滚动，fling）
      */
@@ -147,6 +153,16 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
                     mTranslateY -= distanceY
                     mTranslateY = formatTranslateY(mTranslateY, mScaleRate)
                     invalidate()
+                } else {
+                    mIsScrolling = true
+                    mTranslateX -= distanceX
+                    mTranslateY -= distanceY
+                    if (mTranslateY >= 0 && e2 != null) {
+                        //下滑随着手指移动放缩
+                        mScaleRate =
+                            (height - mTranslateY) / height * mScaleSmall
+                    }
+                    invalidate()
                 }
                 return false
             }
@@ -221,6 +237,10 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
                 // 如果监听了双击事件，那么单击回调用这个
                 return false
             }
+
+            override fun onSingleTapUp(e: MotionEvent?): Boolean {
+                return super.onSingleTapUp(e)
+            }
         })
 
     /**
@@ -257,11 +277,21 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
                 if (detector != null) {
                     if (mScaleRate > mScaleBig) {
                         mIsBig = true
-                        ObjectAnimator.ofFloat(this@KJScrollScaleImageView, "mScaleRate", mScaleRate, mScaleBig).start()
+                        ObjectAnimator.ofFloat(
+                            this@KJScrollScaleImageView,
+                            "mScaleRate",
+                            mScaleRate,
+                            mScaleBig
+                        ).start()
                     }
                     if (mScaleRate < mScaleSmall) {
                         mIsBig = false
-                        ObjectAnimator.ofFloat(this@KJScrollScaleImageView, "mScaleRate", mScaleRate, mScaleSmall).start()
+                        ObjectAnimator.ofFloat(
+                            this@KJScrollScaleImageView,
+                            "mScaleRate",
+                            mScaleRate,
+                            mScaleSmall
+                        ).start()
                     }
                 }
             }
@@ -332,11 +362,50 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
     }
 
     override fun onTouchEvent(event: MotionEvent?): Boolean {
+        if (mIsScrolling && event != null && event.actionMasked == MotionEvent.ACTION_UP && mScaleRate <= mScaleSmall) {
+            handlerUpAfterScroll()
+            mIsScrolling = false
+        }
+
         var result = mScaleGestureDetector.onTouchEvent(event)
         if (!mScaleGestureDetector.isInProgress) {
             result = mGestureDetector.onTouchEvent(event)
         }
         return result
+    }
+
+    /**
+     * 处理scroll之后的up
+     */
+    private fun handlerUpAfterScroll() {
+        // 如果translateY 大于阈值，那么朝中心点缩小之后隐藏（translateX=0，translateY=0，scale=0，alpha 1..0）
+        // 如果translateY 小于阈值，那么弹回原来的位置（tranlateX=0，translateY0，scale=smallScale）
+        val translateX = mTranslateX
+        val translateY = mTranslateY
+        val scaleRate = mScaleRate
+        if (mTranslateY >= DISMISS_TRANSLATE_Y_SPAN) {
+            val animatorTranslateX = ObjectAnimator.ofFloat(this, "mTranslateX", translateX, 0f)
+            val animatorTranslateY = ObjectAnimator.ofFloat(this, "mTranslateY", translateY, 0f)
+            val animatorScale = ObjectAnimator.ofFloat(this, "mScaleRate", scaleRate, 0f)
+            AnimatorSet().apply {
+                playTogether(
+                    animatorScale,
+                    animatorTranslateX,
+                    animatorTranslateY
+                )
+            }.start()
+        } else {
+            val animatorTranslateX = ObjectAnimator.ofFloat(this, "mTranslateX", translateX, 0f)
+            val animatorTranslateY = ObjectAnimator.ofFloat(this, "mTranslateY", translateY, 0f)
+            val animatorScale = ObjectAnimator.ofFloat(this, "mScaleRate", scaleRate, mScaleSmall)
+            AnimatorSet().apply {
+                playTogether(
+                    animatorScale,
+                    animatorTranslateX,
+                    animatorTranslateY
+                )
+            }.start()
+        }
     }
 
     private fun formatTranslateX(value: Float, scaleRate: Float): Float {
