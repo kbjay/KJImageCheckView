@@ -1,8 +1,10 @@
 package com.kbjay.scrollscaleimageview
 
+import android.animation.Animator
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -13,20 +15,18 @@ import android.view.ScaleGestureDetector
 import android.view.View
 import android.widget.OverScroller
 import androidx.core.view.GestureDetectorCompat
+import java.lang.RuntimeException
 
 /**
  * todo 自定义
  * 1.src
  * 2.SPAN_OVER_SCROLL
  * 3.SCALE_REBOUND_FACTOR
+ * 4.MAX_SCALE_RATE
  */
 class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
     private val mPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val mBitmap = if (Math.random() > 0.5f) {
-        BitmapFactory.decodeResource(context.resources, R.drawable.kb)
-    } else {
-        BitmapFactory.decodeResource(context.resources, R.drawable.timg)
-    }
+    private lateinit var mBitmap :Bitmap
 
     companion object {
         const val SPAN_OVER_SCROLL = 200
@@ -69,7 +69,6 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
     private var mGestureDetector = GestureDetectorCompat(
         context,
         object : GestureDetector.SimpleOnGestureListener(), GestureDetector.OnDoubleTapListener {
-
             override fun onDown(e: MotionEvent?): Boolean {
                 // 这里需要返回true表示我要消费事件，其他回调都无所谓
                 return true
@@ -125,25 +124,10 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
 
             private fun handleFling() {
                 if (mOverScroller.computeScrollOffset()) {
-                    println("onFling!!! $mTranslateX")
                     mTranslateX = mOverScroller.currX.toFloat()
                     mTranslateY = mOverScroller.currY.toFloat()
                     invalidate()
                     postOnAnimation { handleFling() }
-                }
-            }
-
-            private fun formatFlingScaleRate(value: Float): Float {
-                return when {
-                    value <= mScaleSmall -> {
-                        mScaleSmall
-                    }
-                    value >= mScaleBig -> {
-                        mScaleBig
-                    }
-                    else -> {
-                        value
-                    }
                 }
             }
 
@@ -153,7 +137,6 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
                 distanceX: Float,
                 distanceY: Float
             ): Boolean {
-                println("onScroll")
                 // e1：down事件
                 // distanceX: 旧位置-新位置
                 if (mScaleRate > mScaleSmall) {
@@ -188,7 +171,6 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
                     mOverScroller.forceFinished(true)
                 }
                 if (mIsBig) {
-                    println("onDoubleTap ")
                     AnimatorSet().apply {
                         playTogether(
                             ObjectAnimator.ofFloat(
@@ -344,6 +326,14 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
+        init()
+    }
+
+    private fun init() {
+        if (!this::mBitmap.isInitialized){
+            throw NullPointerException("you need call showBitmap!!")
+        }
+
         mScaleSmall = when {
             width.toFloat() / height <= mBitmap.width.toFloat() / mBitmap.height -> {
                 width.toFloat() / mBitmap.width
@@ -354,6 +344,8 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
         }
         mScaleBig = mScaleSmall * MAX_SCALE_RATE
         mScaleRate = mScaleSmall
+        mTranslateY = 0f
+        mTranslateX = 0f
     }
 
     override fun onDraw(canvas: Canvas?) {
@@ -386,7 +378,6 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
      * 处理scroll之后的up
      */
     private fun handlerUpAfterScroll() {
-        println("handlerUpAfterScroll")
         // 如果translateY 大于阈值，那么朝中心点缩小之后隐藏（translateX=0，translateY=0，scale=0，alpha 1..0）
         // 如果translateY 小于阈值，那么弹回原来的位置（tranlateX=0，translateY0，scale=smallScale）
         val translateX = mTranslateX
@@ -402,6 +393,20 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
                     animatorTranslateX,
                     animatorTranslateY
                 )
+                addListener(object : Animator.AnimatorListener {
+                    override fun onAnimationRepeat(animation: Animator?) {
+                    }
+
+                    override fun onAnimationEnd(animation: Animator?) {
+                        this@KJScrollScaleImageView.visibility = GONE
+                    }
+
+                    override fun onAnimationCancel(animation: Animator?) {
+                    }
+
+                    override fun onAnimationStart(animation: Animator?) {
+                    }
+                })
             }.start()
         } else {
             val animatorTranslateX = ObjectAnimator.ofFloat(this, "mTranslateX", translateX, 0f)
@@ -469,5 +474,13 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
                 value
             }
         }
+    }
+
+    fun showBitmap(bitmap: Bitmap) {
+        init()
+        visibility = VISIBLE
+        mBitmap = bitmap
+        requestLayout()
+        invalidate()
     }
 }
