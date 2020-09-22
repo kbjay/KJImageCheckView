@@ -184,58 +184,62 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
                     return false
                 }
                 // 如果双击的时候正在fling，那么停止fling
-                if(mOverScroller.computeScrollOffset()){
+                if (mOverScroller.computeScrollOffset()) {
                     mOverScroller.forceFinished(true)
                 }
                 if (mIsBig) {
                     println("onDoubleTap ")
-                    ObjectAnimator.ofFloat(
-                        this@KJScrollScaleImageView,
-                        "mTranslateY",
-                        mTranslateY,
-                        0f
-                    ).start()
-                    ObjectAnimator.ofFloat(
-                        this@KJScrollScaleImageView,
-                        "mTranslateX",
-                        mTranslateX,
-                        0f
-                    ).start()
-                    ObjectAnimator.ofFloat(
-                        this@KJScrollScaleImageView,
-                        "mScaleRate",
-                        mScaleRate,
-                        mScaleSmall
-                    ).start()
+                    AnimatorSet().apply {
+                        playTogether(
+                            ObjectAnimator.ofFloat(
+                                this@KJScrollScaleImageView,
+                                "mTranslateY",
+                                mTranslateY,
+                                0f
+                            ), ObjectAnimator.ofFloat(
+                                this@KJScrollScaleImageView,
+                                "mTranslateX",
+                                mTranslateX,
+                                0f
+                            ), ObjectAnimator.ofFloat(
+                                this@KJScrollScaleImageView,
+                                "mScaleRate",
+                                mScaleRate,
+                                mScaleSmall
+                            )
+                        )
+                    }.start()
                 } else {
                     mTranslateXBeforeDoubleTap = mTranslateX
                     mTranslateYBeforeDoubleTap = mTranslateY
                     mScaleRateBeforeDoubleTap = mScaleRate
                     // 保证bitmap中点击的位置在放大之后相对view的位置不变
-                    ObjectAnimator.ofFloat(
-                        this@KJScrollScaleImageView,
-                        "mTranslateY",
-                        mTranslateYBeforeDoubleTap,
-                        formatTranslateY(
-                            (height / 2f - e.y) * (mScaleBig / mScaleRateBeforeDoubleTap - 1) + mTranslateYBeforeDoubleTap * (mScaleBig / mScaleRateBeforeDoubleTap),
-                            mScaleBig
+                    AnimatorSet().apply {
+                        playTogether(
+                            ObjectAnimator.ofFloat(
+                                this@KJScrollScaleImageView,
+                                "mTranslateY",
+                                mTranslateYBeforeDoubleTap,
+                                formatTranslateY(
+                                    (height / 2f - e.y) * (mScaleBig / mScaleRateBeforeDoubleTap - 1) + mTranslateYBeforeDoubleTap * (mScaleBig / mScaleRateBeforeDoubleTap),
+                                    mScaleBig
+                                )
+                            ), ObjectAnimator.ofFloat(
+                                this@KJScrollScaleImageView,
+                                "mTranslateX",
+                                mTranslateXBeforeDoubleTap,
+                                formatTranslateX(
+                                    (width / 2f - e.x) * (mScaleBig / mScaleRateBeforeDoubleTap - 1) + mTranslateXBeforeDoubleTap * (mScaleBig / mScaleRateBeforeDoubleTap),
+                                    mScaleBig
+                                )
+                            ), ObjectAnimator.ofFloat(
+                                this@KJScrollScaleImageView,
+                                "mScaleRate",
+                                mScaleRate,
+                                mScaleBig
+                            )
                         )
-                    ).start()
-                    ObjectAnimator.ofFloat(
-                        this@KJScrollScaleImageView,
-                        "mTranslateX",
-                        mTranslateXBeforeDoubleTap,
-                        formatTranslateX(
-                            (width / 2f - e.x) * (mScaleBig / mScaleRateBeforeDoubleTap - 1) + mTranslateXBeforeDoubleTap * (mScaleBig / mScaleRateBeforeDoubleTap),
-                            mScaleBig
-                        )
-                    ).start()
-                    ObjectAnimator.ofFloat(
-                        this@KJScrollScaleImageView,
-                        "mScaleRate",
-                        mScaleRate,
-                        mScaleBig
-                    ).start()
+                    }.start()
                 }
                 mIsBig = !mIsBig
                 return false
