@@ -13,7 +13,6 @@ import android.view.ScaleGestureDetector
 import android.view.View
 import android.widget.OverScroller
 import androidx.core.view.GestureDetectorCompat
-import kotlin.properties.Delegates
 
 /**
  * todo 自定义
@@ -26,16 +25,14 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
     private val mBitmap = if (Math.random() > 0.5f) {
         BitmapFactory.decodeResource(context.resources, R.drawable.kb)
     } else {
-        BitmapFactory.decodeResource(context.resources, R.drawable.kb)
+        BitmapFactory.decodeResource(context.resources, R.drawable.timg)
     }
 
     companion object {
         const val SPAN_OVER_SCROLL = 200
         const val SCALE_REBOUND_FACTOR = 0.2f
-        const val HORIZONTAL_PIC = 1
-        const val VERTICAL_PIC = 2
-        const val SUITABLE_PIC = 3
         const val DISMISS_TRANSLATE_Y_SPAN = 200
+        const val MAX_SCALE_RATE = 4f
     }
 
     private var mTranslateX = 0f
@@ -56,7 +53,6 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
             field = value
             invalidate()
         }
-    private var mPicMode by Delegates.notNull<Int>()
 
     /**
      * 处理fling
@@ -87,18 +83,29 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
             ): Boolean {
                 // e1：down事件
                 if (mScaleRate > mScaleSmall) {
-                    val minX = if (mPicMode == HORIZONTAL_PIC) {
-                        -(mBitmap.width * formatFlingScaleRate(mScaleRate) / 2f - width / 2f).toInt()
-                    } else 0
-                    val maxX = if (mPicMode == HORIZONTAL_PIC) {
-                        (mBitmap.width * formatFlingScaleRate(mScaleRate) / 2f - width / 2f).toInt()
-                    } else 0
-                    val minY = if (mPicMode == VERTICAL_PIC) {
-                        -(mBitmap.height * formatFlingScaleRate(mScaleRate) / 2f - height / 2f).toInt()
-                    } else 0
-                    val maxY = if (mPicMode == VERTICAL_PIC) {
-                        (mBitmap.height * formatFlingScaleRate(mScaleRate) / 2f - height / 2f).toInt()
-                    } else 0
+                    val minX =
+                        formatTranslateX(
+                            -(mBitmap.width * mScaleRate / 2f - width / 2f),
+                            mScaleRate
+                        ).toInt()
+
+                    val maxX =
+                        formatTranslateX(
+                            mBitmap.width * mScaleRate / 2f - width / 2f,
+                            mScaleRate
+                        ).toInt()
+
+                    val minY =
+                        formatTranslateY(
+                            -(mBitmap.height * mScaleRate / 2f - height / 2f),
+                            mScaleRate
+                        ).toInt()
+
+                    val maxY =
+                        formatTranslateY(
+                            (mBitmap.height * mScaleRate / 2f - height / 2f),
+                            mScaleRate
+                        ).toInt()
 
                     mOverScroller.fling(
                         mTranslateX.toInt(), mTranslateY.toInt(),
@@ -118,6 +125,7 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
 
             private fun handleFling() {
                 if (mOverScroller.computeScrollOffset()) {
+                    println("onFling!!! $mTranslateX")
                     mTranslateX = mOverScroller.currX.toFloat()
                     mTranslateY = mOverScroller.currY.toFloat()
                     invalidate()
@@ -145,6 +153,7 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
                 distanceX: Float,
                 distanceY: Float
             ): Boolean {
+                println("onScroll")
                 // e1：down事件
                 // distanceX: 旧位置-新位置
                 if (mScaleRate > mScaleSmall) {
@@ -174,8 +183,12 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
                 if (e == null) {
                     return false
                 }
-                // 双击事件
+                // 如果双击的时候正在fling，那么停止fling
+                if(mOverScroller.computeScrollOffset()){
+                    mOverScroller.forceFinished(true)
+                }
                 if (mIsBig) {
+                    println("onDoubleTap ")
                     ObjectAnimator.ofFloat(
                         this@KJScrollScaleImageView,
                         "mTranslateY",
@@ -327,24 +340,15 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        // 如果view的宽高比小于bitmap的宽高比，横行长图片，否则就是纵向长图片
-        when {
-            width.toFloat() / height < mBitmap.width.toFloat() / mBitmap.height -> {
-                mScaleSmall = width.toFloat() / mBitmap.width
-                mScaleBig = height.toFloat() / mBitmap.height
-                mPicMode = HORIZONTAL_PIC
-            }
-            width.toFloat() / height > mBitmap.width.toFloat() / mBitmap.height -> {
-                mScaleSmall = height.toFloat() / mBitmap.height
-                mScaleBig = width.toFloat() / mBitmap.width
-                mPicMode = VERTICAL_PIC
+        mScaleSmall = when {
+            width.toFloat() / height <= mBitmap.width.toFloat() / mBitmap.height -> {
+                width.toFloat() / mBitmap.width
             }
             else -> {
-                mScaleBig = 1f
-                mScaleSmall = 1f
-                mPicMode = SUITABLE_PIC
+                height.toFloat() / mBitmap.height
             }
         }
+        mScaleBig = mScaleSmall * MAX_SCALE_RATE
         mScaleRate = mScaleSmall
     }
 
@@ -378,6 +382,7 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
      * 处理scroll之后的up
      */
     private fun handlerUpAfterScroll() {
+        println("handlerUpAfterScroll")
         // 如果translateY 大于阈值，那么朝中心点缩小之后隐藏（translateX=0，translateY=0，scale=0，alpha 1..0）
         // 如果translateY 小于阈值，那么弹回原来的位置（tranlateX=0，translateY0，scale=smallScale）
         val translateX = mTranslateX
@@ -409,10 +414,6 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
     }
 
     private fun formatTranslateX(value: Float, scaleRate: Float): Float {
-        if (mPicMode != HORIZONTAL_PIC) {
-            return 0f
-        }
-
         val formatRate = when {
             scaleRate > mScaleBig -> mScaleBig
             scaleRate < mScaleSmall -> mScaleSmall
@@ -440,10 +441,6 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
     }
 
     private fun formatTranslateY(value: Float, scaleRate: Float): Float {
-        if (mPicMode != VERTICAL_PIC) {
-            return 0f
-        }
-
         val formatRate = when {
             scaleRate > mScaleBig -> mScaleBig
             scaleRate < mScaleSmall -> mScaleSmall
