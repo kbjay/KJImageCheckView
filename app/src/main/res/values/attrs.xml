@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="kj_scroll_scale_attrs">
+        <attr name="span_over_fling" format="integer"/>
+        <attr name="dismiss_translate_y_span" format="integer"/>
+        <attr name="max_scale_rate" format="float"/>
+        <attr name="scale_rebound_factor" format="float"/>
+    </declare-styleable>
+</resources>

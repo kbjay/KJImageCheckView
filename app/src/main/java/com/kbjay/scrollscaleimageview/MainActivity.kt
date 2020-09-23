@@ -24,11 +24,9 @@ class MainActivity : AppCompatActivity() {
         Glide.with(this).load(url).into(iv)
     }
 
-    public fun clickImage(view: View) {
-        println("click")
+    fun clickImage(view: View) {
         var target = object : CustomTarget<Bitmap>() {
             override fun onLoadCleared(placeholder: Drawable?) {
-                println("onLoadCleared")
             }
 
             override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {

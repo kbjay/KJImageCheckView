@@ -3,10 +3,12 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <data>
+
         <variable
             name="clickEvent"
             type="com.kbjay.scrollscaleimageview.MainActivity" />
     </data>
+
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -16,14 +18,13 @@
             android:id="@+id/iv"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:onClick="@{clickEvent::clickImage}"
-            />
+            android:layout_centerInParent="true"
+            android:onClick="@{clickEvent::clickImage}" />
 
         <com.kbjay.scrollscaleimageview.KJScrollScaleImageView
             android:id="@+id/kjView"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="@android:color/black"
-            android:visibility="gone" />
+            android:background="@android:color/black" />
     </RelativeLayout>
 </layout>
