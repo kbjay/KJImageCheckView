@@ -4,6 +4,8 @@
 3. 拖动查看图片（包括fling处理）
 4. 图片“初始尺寸”时可以下拉隐藏
 
+![效果gif](https://github.com/kbjay/KJImageCheckView/blob/master/result.gif)
+
 # 使用
 1. 自定义属性如下:
 
