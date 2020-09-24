@@ -32,6 +32,15 @@ class MainActivity : AppCompatActivity() {
 
             override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
                 kjView.showBitmap(resource)
+                kjView.mDismissListener = object : KJScrollScaleImageView.DismissListener {
+                    override fun onDismissFinish() {
+                       println("onDismissFinish")
+                    }
+
+                    override fun onDismissStart() {
+                        println("onDismissStart")
+                    }
+                }
             }
         })
     }
