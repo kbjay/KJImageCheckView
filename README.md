@@ -4,3 +4,5 @@
 3. 拖动查看图片（包括fling处理）
 4. 图片“初始尺寸”时可以下拉隐藏
 
+# 下载
+![image]{https://github.com/kbjay/KJImageCheckView/blob/master/apk.png}
