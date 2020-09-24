@@ -5,4 +5,4 @@
 4. 图片“初始尺寸”时可以下拉隐藏
 
 # 下载
-![image](https://github.com/kbjay/KJImageCheckView/blob/master/apk.png)
+![apk下载](https://github.com/kbjay/KJImageCheckView/blob/master/apk.png)
