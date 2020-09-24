@@ -29,22 +29,27 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
     /**
      * fling 的overX跟overY
      */
-    private var mSpanOverFling = 200
+    var mSpanOverFling = 200
 
     /**
      * 双指放大是回弹的factor
      */
-    private var mScaleReboundFactor = 0.2f
+    var mScaleReboundFactor = 0.2f
 
     /**
      * scaleRate=smallRate时,下滑多少距离触发dismiss动画
      */
-    private var mDismissTranslateYSpan = 200
+    var mDismissTranslateYSpan = 200
 
     /**
      * 图片放大的最大倍数（相对于smallRate）
      */
-    private var mMaxScaleRate = 4f
+    var mMaxScaleRate = 4f
+
+    /**
+     * 下滑消失开关
+     */
+    var mEnableScrollDismiss = true
 
     init {
         val typesArray =
@@ -62,6 +67,12 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
         )
         mMaxScaleRate =
             typesArray.getFloat(R.styleable.kj_scroll_scale_attrs_max_scale_rate, mMaxScaleRate)
+
+        mEnableScrollDismiss = typesArray.getBoolean(
+            R.styleable.kj_scroll_scale_attrs_enable_scroll_dismiss,
+            mEnableScrollDismiss
+        )
+
         typesArray.recycle()
 
         visibility = GONE
@@ -172,23 +183,26 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
                 // e1：down事件
                 // distanceX: 旧位置-新位置
                 if (mScaleRate > mScaleSmall) {
+                    // 随着手指移动
                     mTranslateX -= distanceX
                     mTranslateX = formatTranslateX(mTranslateX, mScaleRate)
                     mTranslateY -= distanceY
                     mTranslateY = formatTranslateY(mTranslateY, mScaleRate)
                     invalidate()
                 } else {
-                    mIsScrolling = true
-                    mTranslateX -= distanceX
-                    mTranslateY -= distanceY
-                    if (mTranslateY >= 0 && e2 != null) {
-                        //下滑随着手指移动放缩
-                        mScaleRate =
-                            (height - mTranslateY) / height * mScaleSmall
-                        alpha = 1 - alpha / height * mTranslateY
-                        println(alpha)
+                    // 下滑dismiss
+                    if (mEnableScrollDismiss) {
+                        mIsScrolling = true
+                        mTranslateX -= distanceX
+                        mTranslateY -= distanceY
+                        if (mTranslateY >= 0 && e2 != null) {
+                            //下滑随着手指移动放缩
+                            mScaleRate =
+                                (height - mTranslateY) / height * mScaleSmall
+                            alpha = 1 - alpha / height * mTranslateY
+                        }
+                        invalidate()
                     }
-                    invalidate()
                 }
                 return false
             }
@@ -205,6 +219,7 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
                     mOverScroller.forceFinished(true)
                 }
                 if (mIsBig) {
+                    // 双击缩小
                     AnimatorSet().apply {
                         playTogether(
                             ObjectAnimator.ofFloat(
@@ -226,6 +241,7 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
                         )
                     }.start()
                 } else {
+                    // 双击放大
                     mTranslateXBeforeDoubleTap = mTranslateX
                     mTranslateYBeforeDoubleTap = mTranslateY
                     mScaleRateBeforeDoubleTap = mScaleRate
@@ -307,6 +323,7 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
             }
 
             override fun onScaleEnd(detector: ScaleGestureDetector?) {
+                // 双指放缩回弹
                 if (detector != null) {
                     if (mScaleRate > mScaleBig) {
                         mIsBig = true
@@ -330,6 +347,7 @@ class KJScrollScaleImageView(context: Context, attrs: AttributeSet?) : View(cont
             }
 
             override fun onScale(detector: ScaleGestureDetector?): Boolean {
+                // 双指放缩
                 if (detector != null) {
                     mScaleRate = mScaleRateBeforeScale * detector.scaleFactor
                     // 设置tranlateX,要求沿着中心点

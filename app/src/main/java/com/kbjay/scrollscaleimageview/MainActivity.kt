@@ -21,20 +21,18 @@ class MainActivity : AppCompatActivity() {
         val binding = ActivityMainBinding.inflate(LayoutInflater.from(this))
         binding.clickEvent = this
         setContentView(binding.root)
+
         Glide.with(this).load(url).into(iv)
     }
 
     fun clickImage(view: View) {
-        var target = object : CustomTarget<Bitmap>() {
+        Glide.with(this).asBitmap().load(url).into(object : CustomTarget<Bitmap>() {
             override fun onLoadCleared(placeholder: Drawable?) {
             }
 
             override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
                 kjView.showBitmap(resource)
             }
-
-        }
-        Glide.with(this).asBitmap().load(url).into(target)
+        })
     }
-
 }
